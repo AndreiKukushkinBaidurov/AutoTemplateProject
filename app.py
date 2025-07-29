@@ -185,6 +185,9 @@ with col1:
                 hotel_ids = df.iloc[:, 0].tolist()
                 top_1000_hotels = hotel_ids[:1000] if len(hotel_ids) > 1000 else hotel_ids
                 
+                # Store in session state for webhook use
+                st.session_state.hotel_ids_list = top_1000_hotels
+                
                 st.success(f"✅ File uploaded successfully! Found {len(hotel_ids)} Hotel IDs")
                 st.info(f"📈 Displaying top {len(top_1000_hotels)} hotels")
                 
@@ -198,6 +201,10 @@ with col1:
                 
         except Exception as e:
             st.error(f"❌ Error reading file: {str(e)}")
+    else:
+        # Clear session state if no file uploaded
+        if 'hotel_ids_list' in st.session_state:
+            del st.session_state.hotel_ids_list
 
 with col2:
     st.markdown("### 📋 Summary")
@@ -229,12 +236,14 @@ with col2:
     st.markdown("---")
     
     # Summary card
+    hotel_ids_count = len(st.session_state.get('hotel_ids_list', []))
     st.markdown(f"""
     <div class="result-card">
         <h4>📊 Current Selection</h4>
         <p><strong>Hotels:</strong> {hotel_quantity:,}</p>
         <p><strong>Countries:</strong> {len(selected_countries)}</p>
         <p><strong>File Status:</strong> {'✅ Uploaded' if uploaded_file else '⏳ Pending'}</p>
+        <p><strong>Hotel IDs:</strong> {hotel_ids_count} loaded</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -270,20 +279,20 @@ col_submit1, col_submit2, col_submit3 = st.columns([1, 2, 1])
 with col_submit2:
     if st.button("🚀 Submit Questionnaire", use_container_width=True):
         if selected_countries and (uploaded_file is not None):
-            # Get hotel IDs list
-            try:
-                df = pd.read_csv(uploaded_file)
-                hotel_ids_list = df.iloc[:, 0].tolist()
-                top_1000_hotels = hotel_ids_list[:1000] if len(hotel_ids_list) > 1000 else hotel_ids_list
-            except:
-                top_1000_hotels = []
+            # Get hotel IDs from session state
+            hotel_ids_list = st.session_state.get('hotel_ids_list', [])
             
             st.session_state.form_submitted = True
+            
+            # Debug info
+            st.write(f"Debug: Hotel IDs count: {len(hotel_ids_list)}")
+            if hotel_ids_list:
+                st.write(f"Debug: First few IDs: {hotel_ids_list[:5]}")
             
             # Show processing message
             with st.spinner('Sending data to webhook...'):
                 # Send to webhook
-                success, message = send_to_webhook(hotel_quantity, selected_countries, top_1000_hotels, webhook_url)
+                success, message = send_to_webhook(hotel_quantity, selected_countries, hotel_ids_list, webhook_url)
             
             if success:
                 st.balloons()
@@ -316,7 +325,7 @@ with col_submit2:
                 "Value": [
                     f"{hotel_quantity:,}",
                     f"{len(selected_countries)} countries",
-                    f"{len(top_1000_hotels) if uploaded_file else 0} hotels",
+                    f"{len(hotel_ids_list)} hotels",
                     "✅ Sent" if success else "❌ Failed"
                 ]
             }
@@ -348,14 +357,14 @@ with col_submit2:
                 
                 with col_prev3:
                     with st.expander("🏨 Hotel IDs CSV"):
-                        if top_1000_hotels:
+                        if hotel_ids_list:
                             hotels_preview = pd.DataFrame({
-                                'Hotel_ID': top_1000_hotels[:5],
-                                'Order': range(1, min(6, len(top_1000_hotels) + 1))
+                                'Hotel_ID': hotel_ids_list[:5],
+                                'Order': range(1, min(6, len(hotel_ids_list) + 1))
                             })
                             st.dataframe(hotels_preview)
-                            if len(top_1000_hotels) > 5:
-                                st.text(f"... and {len(top_1000_hotels) - 5} more hotel IDs")
+                            if len(hotel_ids_list) > 5:
+                                st.text(f"... and {len(hotel_ids_list) - 5} more hotel IDs")
                         else:
                             st.text("No hotel IDs provided")
             
