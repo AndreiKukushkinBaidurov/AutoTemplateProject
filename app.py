@@ -61,12 +61,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Function to send CSV files to n8n webhook
-def send_to_webhook(hotel_quantity, selected_countries, hotel_ids_list):
+def send_to_webhook(hotel_quantity, selected_countries, hotel_ids_list, webhook_url):
     """
     Send questionnaire results as 3 CSV files to n8n webhook
     """
-    webhook_url = "http://localhost:5678/webhook-test/ClientDataQuestion"
-    
     try:
         # Create CSV 1: Configuration Summary
         config_data = {
@@ -204,6 +202,32 @@ with col1:
 with col2:
     st.markdown("### 📋 Summary")
     
+    # Webhook Configuration Section
+    st.markdown("### 🔗 Webhook Configuration")
+    
+    # Default webhook URLs for different environments
+    default_local = "http://localhost:5678/webhook-test/ClientDataQuestion"
+    default_public = "https://your-n8n-domain.com/webhook-test/ClientDataQuestion"
+    
+    webhook_option = st.radio(
+        "Select webhook environment:",
+        options=["Local (localhost:5678)", "Custom URL"],
+        index=0,
+        help="Choose whether to connect to local n8n or a custom webhook URL"
+    )
+    
+    if webhook_option == "Local (localhost:5678)":
+        webhook_url = default_local
+        st.info("🏠 Using local n8n instance")
+    else:
+        webhook_url = st.text_input(
+            "Enter custom webhook URL:",
+            value=default_public,
+            help="Enter the full webhook URL including https://"
+        )
+    
+    st.markdown("---")
+    
     # Summary card
     st.markdown(f"""
     <div class="result-card">
@@ -227,13 +251,15 @@ with col2:
     if st.button("🧪 Test Webhook Connection", use_container_width=True):
         with st.spinner('Testing webhook connection...'):
             try:
-                test_response = requests.get("http://localhost:5678/webhook-test/ClientDataQuestion", timeout=5)
+                test_response = requests.get(webhook_url, timeout=5)
                 if test_response.status_code in [200, 404, 405]:  # These are expected responses
                     st.success("✅ Webhook endpoint is reachable!")
                 else:
                     st.warning(f"⚠️ Webhook responded with status: {test_response.status_code}")
             except requests.exceptions.ConnectionError:
-                st.error("❌ Cannot connect to webhook. Ensure n8n is running on localhost:5678")
+                st.error(f"❌ Cannot connect to webhook at {webhook_url}")
+                if "localhost" in webhook_url:
+                    st.error("💡 **Tip**: If this is a deployed app, use 'Custom URL' option with your public n8n webhook URL")
             except Exception as e:
                 st.error(f"❌ Connection test failed: {str(e)}")
 
@@ -257,7 +283,7 @@ with col_submit2:
             # Show processing message
             with st.spinner('Sending data to webhook...'):
                 # Send to webhook
-                success, message = send_to_webhook(hotel_quantity, selected_countries, top_1000_hotels)
+                success, message = send_to_webhook(hotel_quantity, selected_countries, top_1000_hotels, webhook_url)
             
             if success:
                 st.balloons()
@@ -272,12 +298,12 @@ with col_submit2:
                 """, unsafe_allow_html=True)
                 
                 # Show webhook details
-                st.info("""
+                st.info(f"""
                 📤 **Data sent to webhook:**
                 - **Config Summary CSV**: Hotel quantity, countries count, submission date
                 - **Selected Countries CSV**: List of all selected destination countries  
                 - **Hotel IDs CSV**: Uploaded hotel IDs (up to 1000)
-                - **Webhook URL**: http://localhost:5678/webhook-test/ClientDataQuestion
+                - **Webhook URL**: {webhook_url}
                 """)
                 
             else:
